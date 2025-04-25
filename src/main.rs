@@ -9,6 +9,125 @@ use opencv::{
     Result,
 };
 
+fn capture_face2(reference_path: &str) -> Result<()> {
+    let mut cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?;
+    let mut save_faces = false;
+    if !videoio::VideoCapture::is_opened(&cam)? {
+        panic!("Unable to open default camera!");
+    }
+
+    let mut face_cascade = objdetect::CascadeClassifier::new(
+        "/opt/homebrew/share/opencv4/haarcascades/haarcascade_frontalface_default.xml"
+    )?;
+
+    // Load and prepare reference face
+    let reference_img = opencv::imgcodecs::imread(reference_path, opencv::imgcodecs::IMREAD_COLOR)?;
+    let mut reference_resized = Mat::default();
+    imgproc::resize(
+        &reference_img,
+        &mut reference_resized,
+        core::Size::new(128, 128),
+        0.0,
+        0.0,
+        imgproc::INTER_LINEAR,
+    )?;
+
+    highgui::named_window("webcam", highgui::WINDOW_AUTOSIZE)?;
+
+    loop {
+        let mut frame = Mat::default();
+        cam.read(&mut frame)?;
+        if frame.size()?.width == 0 {
+            continue;
+        }
+
+        let mut gray = Mat::default();
+        imgproc::cvt_color(
+            &frame,
+            &mut gray,
+            imgproc::COLOR_BGR2GRAY,
+            0,
+            core::AlgorithmHint::ALGO_HINT_DEFAULT,
+        )?;
+
+        let mut faces = core::Vector::<core::Rect>::new();
+        face_cascade.detect_multi_scale(
+            &gray,
+            &mut faces,
+            1.1,
+            3,
+            0,
+            core::Size::new(30, 30),
+            core::Size::new(0, 0),
+        )?;
+
+        for face in faces {
+            imgproc::rectangle(
+                &mut frame,
+                face,
+                core::Scalar::new(0.0, 255.0, 0.0, 0.0),
+                2,
+                imgproc::LINE_8,
+                0,
+            )?;
+
+            let face_roi = core::Rect::new(face.x, face.y, face.width, face.height);
+            let cropped = Mat::roi(&frame, face_roi)?;
+
+            // Resize detected face
+            let mut resized_face = Mat::default();
+            imgproc::resize(
+                &cropped,
+                &mut resized_face,
+                core::Size::new(128, 128),
+                0.0,
+                0.0,
+                imgproc::INTER_LINEAR,
+            )?;
+
+            // Compare detected face to reference
+            let mut diff = Mat::default();
+            core::absdiff(&resized_face, &reference_resized, &mut diff)?;
+            let distance = core::norm(&diff, core::NORM_L2, &core::no_array())?;
+
+            let label = if distance < 3000.0 {
+                format!("{}, distance: {:.2}", reference_path, distance)
+            } else {
+                format!("Unknown, distance: {:.2}", distance)
+            };
+
+            imgproc::put_text(
+                &mut frame,
+                &label,
+                core::Point::new(face.x, face.y - 10),
+                imgproc::FONT_HERSHEY_SIMPLEX,
+                0.5,
+                core::Scalar::new(0.0, 255.0, 0.0, 0.0),
+                1,
+                imgproc::LINE_AA,
+                false,
+            )?;
+
+            if save_faces {
+                let filename = format!("face_{}.png", chrono::Utc::now().timestamp());
+                opencv::imgcodecs::imwrite(&filename, &resized_face, &core::Vector::new())?;
+                println!("Saved resized face to {}", filename);
+            }
+        }
+
+        highgui::imshow("webcam", &frame)?;
+
+        let key = highgui::wait_key(10)?;
+        if key == 'q' as i32 {
+            break;
+        } else if key == 's' as i32 {
+            save_faces = true;
+        }
+    }
+
+    Ok(())
+}
+
 fn capture_face() -> Result<()> {
     let mut cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?;
     let mut save_faces = false;
@@ -195,14 +314,14 @@ fn main() -> Result<()> {
     let samssi = "samssi-resize.png";
     let jp = "juhapekkam-resize.png";
     //detect_and_resize_face("juhapekkam.png", "juhapekkam-resize.png")?;
-    //capture_face()
+    capture_face2(samssi)?;
 
-    let jp_distance = compare_faces(captured, jp)?;
-    let samssi_distance = compare_faces(captured, samssi)?;
-
-
-    println!("jp distance: {}", jp_distance);
-    println!("samssi distance: {}", samssi_distance);
+    // let jp_distance = compare_faces(captured, jp)?;
+    // let samssi_distance = compare_faces(captured, samssi)?;
+    //
+    //
+    // println!("jp distance: {}", jp_distance);
+    // println!("samssi distance: {}", samssi_distance);
 
     Ok(())
 }
