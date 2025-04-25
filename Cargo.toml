@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-opencv = { version = "0.94.4", default-features = false, features = ["clang-runtime", "imgcodecs", "highgui", "videoio"] }
+opencv = { version = "0.94.4", default-features = false, features = ["clang-runtime", "imgcodecs", "highgui", "videoio", "imgproc", "objdetect"] }
