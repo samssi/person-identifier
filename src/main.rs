@@ -1,3 +1,4 @@
+use std::path::Path;
 use opencv::{
     core,
     highgui,
@@ -20,11 +21,40 @@ fn capture_face2(reference_path: &str) -> Result<()> {
         "/opt/homebrew/share/opencv4/haarcascades/haarcascade_frontalface_default.xml"
     )?;
 
-    // Load and prepare reference face
+    // Load reference image
     let reference_img = opencv::imgcodecs::imread(reference_path, opencv::imgcodecs::IMREAD_COLOR)?;
+
+    // Detect face in reference image
+    let mut gray_ref = Mat::default();
+    imgproc::cvt_color(
+        &reference_img,
+        &mut gray_ref,
+        imgproc::COLOR_BGR2GRAY,
+        0,
+        core::AlgorithmHint::ALGO_HINT_DEFAULT,
+    )?;
+
+    let mut faces_ref = core::Vector::<core::Rect>::new();
+    face_cascade.detect_multi_scale(
+        &gray_ref,
+        &mut faces_ref,
+        1.1,
+        3,
+        0,
+        core::Size::new(30, 30),
+        core::Size::new(0, 0),
+    )?;
+
+    if faces_ref.is_empty() {
+        panic!("No face found in reference image: {}", reference_path);
+    }
+
+    let face_ref = faces_ref.get(0)?;
+    let face_roi_ref = Mat::roi(&reference_img, face_ref)?;
+
     let mut reference_resized = Mat::default();
     imgproc::resize(
-        &reference_img,
+        &face_roi_ref,
         &mut reference_resized,
         core::Size::new(128, 128),
         0.0,
@@ -33,6 +63,12 @@ fn capture_face2(reference_path: &str) -> Result<()> {
     )?;
 
     highgui::named_window("webcam", highgui::WINDOW_AUTOSIZE)?;
+
+    let filename = Path::new(reference_path)
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap_or("Unknown");
 
     loop {
         let mut frame = Mat::default();
@@ -74,7 +110,6 @@ fn capture_face2(reference_path: &str) -> Result<()> {
             let face_roi = core::Rect::new(face.x, face.y, face.width, face.height);
             let cropped = Mat::roi(&frame, face_roi)?;
 
-            // Resize detected face
             let mut resized_face = Mat::default();
             imgproc::resize(
                 &cropped,
@@ -90,8 +125,8 @@ fn capture_face2(reference_path: &str) -> Result<()> {
             core::absdiff(&resized_face, &reference_resized, &mut diff)?;
             let distance = core::norm(&diff, core::NORM_L2, &core::no_array())?;
 
-            let label = if distance < 3000.0 {
-                format!("{}, distance: {:.2}", reference_path, distance)
+            let label = if distance < 20000.0 {
+                format!("{}, distance: {:.2}", filename, distance)
             } else {
                 format!("Unknown, distance: {:.2}", distance)
             };
@@ -109,9 +144,9 @@ fn capture_face2(reference_path: &str) -> Result<()> {
             )?;
 
             if save_faces {
-                let filename = format!("face_{}.png", chrono::Utc::now().timestamp());
-                opencv::imgcodecs::imwrite(&filename, &resized_face, &core::Vector::new())?;
-                println!("Saved resized face to {}", filename);
+                let save_filename = format!("face_{}.png", chrono::Utc::now().timestamp());
+                opencv::imgcodecs::imwrite(&save_filename, &resized_face, &core::Vector::new())?;
+                println!("Saved resized face to {}", save_filename);
             }
         }
 
