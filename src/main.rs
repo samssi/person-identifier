@@ -190,10 +190,19 @@ fn compare_faces(path1: &str, path2: &str) -> Result<f64> {
     Ok(distance)
 }
 
-
-
 fn main() -> Result<()> {
-    detect_and_resize_face("samssi.png", "samssi-resize.png")?;
+    let captured = "face_1745610753.png";
+    let samssi = "samssi-resize.png";
+    let jp = "juhapekkam-resize.png";
+    //detect_and_resize_face("juhapekkam.png", "juhapekkam-resize.png")?;
     //capture_face()
+
+    let jp_distance = compare_faces(captured, jp)?;
+    let samssi_distance = compare_faces(captured, samssi)?;
+
+
+    println!("jp distance: {}", jp_distance);
+    println!("samssi distance: {}", samssi_distance);
+
     Ok(())
 }
