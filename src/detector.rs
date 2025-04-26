@@ -155,22 +155,21 @@ pub fn run_detector(reference_image_path: &str) -> Result<(), Error> {
         }
 
         let bw_frame = colored_image_to_black_and_white(&frame)?;
-        let bw_image_resized = resize_image(bw_frame)?;
         let mut resulting_frame = frame.clone();
 
-        let faces = detect_face_with_haar_cascade(&bw_image_resized)?;
+        let faces = detect_face_with_haar_cascade(&bw_frame)?;
         for face in faces {
             // Add box where identification happened to the original frame
-            let frame_with_debug_box = add_identification_rectangle_to_image(&frame, face)?;
+            resulting_frame = add_identification_rectangle_to_image(&resulting_frame, face)?;
 
             let face_roi = Rect::new(face.x, face.y, face.width, face.height);
-            let person_face = Mat::roi(&frame_with_debug_box, face_roi)?;
+            let person_face = Mat::roi(&resulting_frame, face_roi)?;
 
             let person_face_resized = resize_image(person_face)?;
             let person_face_resized_bw = to_bw_image(&person_face_resized)?;
             let distance = compare_faces(&person_face_resized_bw, &reference_image)?;
 
-            resulting_frame = add_label_to_face(&frame_with_debug_box, &face, distance, reference_image_path)?;
+            resulting_frame = add_label_to_face(&resulting_frame, &face, distance, reference_image_path)?;
         }
 
         highgui::imshow("webcam", &resulting_frame)?;
