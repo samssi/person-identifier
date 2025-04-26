@@ -120,8 +120,21 @@ pub fn add_label_to_face(image: &Mat, face: &Rect, distance: f64, filename: &str
     Ok(labeled_image)
 }
 
+pub fn to_bw_image(image: &Mat) -> Result<Mat, Error> {
+    let mut bw_image = Mat::default();
+    imgproc::cvt_color(
+        &image,
+        &mut bw_image,
+        imgproc::COLOR_BGR2GRAY,
+        0,
+        opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT,
+    )?;
+
+    Ok(bw_image)
+}
+
 pub fn run_detector(reference_image_path: &str) -> Result<(), Error> {
-    highgui::named_window("Super duper person detector", highgui::WINDOW_AUTOSIZE)?;
+    highgui::named_window("webcam", highgui::WINDOW_AUTOSIZE)?;
     let mut cam = try_to_start_video_capture()?;
     let loaded_reference_image = imgcodecs::imread(reference_image_path, opencv::imgcodecs::IMREAD_GRAYSCALE)?;
     let reference_image_faces = detect_face_with_haar_cascade(&loaded_reference_image)?;
@@ -143,6 +156,7 @@ pub fn run_detector(reference_image_path: &str) -> Result<(), Error> {
 
         let bw_frame = colored_image_to_black_and_white(&frame)?;
         let bw_image_resized = resize_image(bw_frame)?;
+        let mut resulting_frame = frame.clone();
 
         let faces = detect_face_with_haar_cascade(&bw_image_resized)?;
         for face in faces {
@@ -153,16 +167,18 @@ pub fn run_detector(reference_image_path: &str) -> Result<(), Error> {
             let person_face = Mat::roi(&frame_with_debug_box, face_roi)?;
 
             let person_face_resized = resize_image(person_face)?;
-            let distance = compare_faces(&person_face_resized, &reference_image)?;
+            let person_face_resized_bw = to_bw_image(&person_face_resized)?;
+            let distance = compare_faces(&person_face_resized_bw, &reference_image)?;
 
-            let resulting_frame = add_label_to_face(&frame_with_debug_box, &face, distance, reference_image_path)?;
+            resulting_frame = add_label_to_face(&frame_with_debug_box, &face, distance, reference_image_path)?;
+        }
 
-            highgui::imshow("Super duper person detector", &resulting_frame)?;
+        highgui::imshow("webcam", &resulting_frame)?;
 
-            let key = highgui::wait_key(10)?;
-            if key == 'q' as i32 {
-                break;
-            }
+        let key = highgui::wait_key(10)?;
+        if key == 'q' as i32 {
+            break;
         }
     }
+    Ok(())
 }
